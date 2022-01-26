@@ -29,12 +29,6 @@ pub fn parse_redirect_html(content: &str) -> Option<&str> {
 pub fn is_valid_path<P: AsRef<Path>>(path: P) -> bool {
     lazy_static::lazy_static! {
         static ref FILE_RE: Regex = Regex::new(FILE_PATTERN).unwrap();
-        static ref FILE_PREFIXES: HashSet<String> = {
-            let mut prefixes = HashSet::new();
-            prefixes.extend(('2'..='7').map(|c| c.to_string()));
-            prefixes.extend(('A'..='Z').map(|c| c.to_string()));
-            prefixes
-        };
     }
 
     path.as_ref()
@@ -44,4 +38,19 @@ pub fn is_valid_path<P: AsRef<Path>>(path: P) -> bool {
         .and_then(|groups| groups.get(1))
         .map(|m| FILE_PREFIXES.contains(m.as_str()))
         .unwrap_or(false)
+}
+
+pub fn file_prefixes() -> Vec<String> {
+    let mut result = FILE_PREFIXES.clone().into_iter().collect::<Vec<_>>();
+    result.sort();
+    result
+}
+
+lazy_static::lazy_static! {
+    static ref FILE_PREFIXES: HashSet<String> = {
+        let mut prefixes = HashSet::new();
+        prefixes.extend(('2'..='7').map(|c| c.to_string()));
+        prefixes.extend(('A'..='Z').map(|c| c.to_string()));
+        prefixes
+    };
 }
