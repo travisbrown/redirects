@@ -1,7 +1,6 @@
-#![feature(is_sorted)]
-
 use clap::Parser;
 use simplelog::LevelFilter;
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -19,12 +18,16 @@ fn main() -> Result<(), std::io::Error> {
         entries.sort_by_key(|entry| entry.path());
         let mut saw_invalid = false;
 
-        if entries.len() > 32 {
-            log::error!("Too many files in data directory ({})", entries.len());
-            saw_invalid = true;
-        } else if entries.len() < 32 {
-            log::error!("Too few files in data directory ({})", entries.len());
-            saw_invalid = true;
+        match entries.len().cmp(&32) {
+            Ordering::Greater => {
+                log::error!("Too many files in data directory ({})", entries.len());
+                saw_invalid = true;
+            }
+            Ordering::Less => {
+                log::error!("Too few files in data directory ({})", entries.len());
+                saw_invalid = true;
+            }
+            _ => {}
         }
 
         for entry in entries {
@@ -69,30 +72,50 @@ fn print_validation_messages<P: AsRef<Path> + Clone + Debug>(
 fn validate<P: AsRef<Path> + Clone>(path: P) -> Result<(Vec<String>, bool), std::io::Error> {
     let mut computer = redirects::digest::Computer::default();
     let mut bad = vec![];
-    let file = BufReader::new(std::fs::File::open(path.clone())?);
+    let mut is_sorted = true;
+    let file = BufReader::new(std::fs::File::open(path)?);
 
-    for line in file.lines() {
-        let line = line?;
-        let mut parts = line.split(',');
-        if let Some((digest, url)) = parts.next().zip(parts.next()) {
-            let content = redirects::make_redirect_html(url);
-            let computed_digest = computer.digest(&mut content.as_bytes())?;
+    let mut lines = file.lines();
+    if let Some(first) = lines.next() {
+        let first = first?;
 
-            if digest != computed_digest {
-                bad.push(line);
+        if !validate_line(&mut computer, &first)? {
+            bad.push(first.clone());
+        }
+
+        let mut last_seen = first;
+
+        for line in lines {
+            let line = line?;
+
+            if line <= last_seen {
+                is_sorted = false;
             }
-        } else {
-            bad.push(line);
+
+            if !validate_line(&mut computer, &line)? {
+                bad.push(line.clone());
+            }
+
+            last_seen = line;
         }
     }
 
-    let file = BufReader::new(std::fs::File::open(path)?);
-    let is_sorted = file.lines().is_sorted_by(|a, b| match (a, b) {
-        (Ok(a), Ok(b)) => a.partial_cmp(b),
-        _ => None,
-    });
-
     Ok((bad, is_sorted))
+}
+
+fn validate_line(
+    computer: &mut redirects::digest::Computer,
+    input: &str,
+) -> Result<bool, std::io::Error> {
+    let mut parts = input.split(',');
+    if let Some((digest, url)) = parts.next().zip(parts.next()) {
+        let content = redirects::make_redirect_html(url);
+        let computed_digest = computer.digest(&mut content.as_bytes())?;
+
+        Ok(digest == computed_digest)
+    } else {
+        Ok(false)
+    }
 }
 
 #[derive(Parser)]
