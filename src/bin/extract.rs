@@ -13,8 +13,6 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut by_digest = HashMap::new();
 
-    //match opts.command {
-    //    SubCommand::Digests => {
     let mut entries = std::fs::read_dir("data")?.collect::<Result<Vec<_>, _>>()?;
     entries.sort_by_key(|entry| entry.path());
 
@@ -52,9 +50,6 @@ fn main() -> Result<(), std::io::Error> {
             log::error!("Invalid retweet line: {}", line);
         }
     }
-
-    //}
-    //}
 
     Ok(())
 }
